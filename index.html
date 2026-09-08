@@ -144,7 +144,7 @@
       monochromeButton.disabled = false;
       graphiteButton.disabled = false;
       if (payload.error) { promptStatus.textContent = `Ошибка: ${payload.error}`; return; }
-      previewImage.src = `${payload.preview_url}?t=${Date.now()}`;
+      previewImage.src = `${API_BASE}${payload.preview_url}?t=${Date.now()}`;
       promptStatus.textContent = `Стиль применён: ${label}. Проверьте результат и утвердите его.`;
     }
 
