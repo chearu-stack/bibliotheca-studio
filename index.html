@@ -24,7 +24,7 @@
     .actions { display: flex; gap: 1rem; }
     .actions button { flex: 1; }
     #preview-image { display: block; margin: 1.5rem auto; max-height: 70vh; object-fit: contain; width: 100%; }
-    .style-controls { display: flex; gap: 1rem; margin: 1rem 0; }
+    .style-controls { display: flex; flex-wrap: wrap; gap: 1rem; margin: 1rem 0; }
     .style-controls button { margin-top: 0; }
     .tuning-controls { display: grid; gap: .8rem 1.2rem; grid-template-columns: repeat(3, 1fr); margin: 1rem 0; }
     .tuning-controls label { margin: 0; }
@@ -75,6 +75,7 @@
     <div id="style-controls" class="style-controls" hidden>
       <button id="monochrome-button" type="button">Чёрно-белое</button>
       <button id="graphite-button" type="button">Карандаш / графит / уголь</button>
+      <button id="photo-graphite-button" type="button">Фото → графит</button>
     </div>
     <div id="tuning-controls" class="tuning-controls" hidden>
       <label for="line-width">Толщина линии: <output id="line-width-value" class="tuning-value">2</output>
@@ -112,6 +113,7 @@
     const styleControls = document.getElementById('style-controls');
     const monochromeButton = document.getElementById('monochrome-button');
     const graphiteButton = document.getElementById('graphite-button');
+    const photoGraphiteButton = document.getElementById('photo-graphite-button');
     const tuningControls = document.getElementById('tuning-controls');
     const lineWidth = document.getElementById('line-width');
     const contrast = document.getElementById('contrast');
@@ -167,13 +169,11 @@
 
     async function applyStyle(style, label) {
       currentStyle = style;
-      monochromeButton.disabled = true;
-      graphiteButton.disabled = true;
+      styleControls.querySelectorAll('button').forEach(button => button.disabled = true);
       tuningControls.querySelectorAll('input').forEach(input => input.disabled = true);
       promptStatus.textContent = `Применяем стиль: ${label}…`;
       const payload = await fetch(`${API_BASE}/api/filter`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({job_id: currentJobId, style, ...tuningPayload()}) }).then(response => response.json());
-      monochromeButton.disabled = false;
-      graphiteButton.disabled = false;
+      styleControls.querySelectorAll('button').forEach(button => button.disabled = false);
       tuningControls.querySelectorAll('input').forEach(input => input.disabled = false);
       if (payload.error) { promptStatus.textContent = `Ошибка: ${payload.error}`; return; }
       previewImage.src = `${API_BASE}${payload.preview_url}?t=${Date.now()}`;
@@ -271,6 +271,7 @@
     });
     monochromeButton.addEventListener('click', () => applyStyle('monochrome', 'чёрно-белое'));
     graphiteButton.addEventListener('click', () => applyStyle('graphite', 'карандаш / графит / уголь'));
+    photoGraphiteButton.addEventListener('click', () => applyStyle('photo_graphite', 'фото → графит'));
     [lineWidth, contrast, detail].forEach(input => input.addEventListener('input', () => {
       lineWidthValue.value = lineWidth.value;
       lineWidthValue.textContent = lineWidth.value;
@@ -280,7 +281,8 @@
       detailValue.textContent = detail.value;
       if (currentStyle && currentJobId) {
         clearTimeout(styleTimer);
-        styleTimer = setTimeout(() => applyStyle(currentStyle, currentStyle === 'graphite' ? 'карандаш / графит / уголь' : 'чёрно-белое'), 250);
+        const label = currentStyle === 'graphite' ? 'карандаш / графит / уголь' : currentStyle === 'photo_graphite' ? 'фото → графит' : 'чёрно-белое';
+        styleTimer = setTimeout(() => applyStyle(currentStyle, label), 250);
       }
     }));
     approveButton.addEventListener('click', async (event) => {
