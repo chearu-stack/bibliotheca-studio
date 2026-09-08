@@ -135,6 +135,11 @@
     const API_BASE = 'http://127.0.0.1:5000';
     let approvalFlags = {};
     let confirmationBypass = false;
+    const promptLabel = document.querySelector('label[for="prompt-text"]');
+    const finalPromptLabel = document.querySelector('label[for="final-prompt"]');
+    promptLabel.textContent = 'Итоговый английский промпт (можно отредактировать)';
+    finalPrompt.hidden = true;
+    finalPromptLabel.hidden = true;
 
     async function loadExistingImage() {
       currentJobId = null;
@@ -143,6 +148,9 @@
       clearButton.disabled = true;
       styleControls.hidden = true;
       tuningControls.hidden = true;
+      promptText.value = '';
+      promptText.disabled = true;
+      renderButton.disabled = true;
       finalPrompt.value = '';
       if (!workSelect.value || workSelect.disabled) {
         previewImage.removeAttribute('src');
@@ -182,9 +190,15 @@
     }
 
     function sourceMode() { return document.querySelector('input[name="prompt-source"]:checked').value; }
+    function resetPromptDraft() {
+      promptText.value = '';
+      promptText.disabled = true;
+      renderButton.disabled = true;
+    }
     function updateSourceControls() {
       const custom = sourceMode() === 'custom';
       customDescription.disabled = !custom;
+      promptButton.textContent = custom ? 'Перевести в английский промпт' : 'Сгенерировать промпт';
       promptButton.disabled = workSelect.disabled || (custom && !customDescription.value.trim());
     }
     async function loadWorks(reset = true) {
@@ -211,7 +225,7 @@
     workSelect.addEventListener('change', loadExistingImage);
     searchInput.addEventListener('input', () => loadWorks());
     loadMore.addEventListener('click', () => loadWorks(false));
-    document.querySelectorAll('input[name="prompt-source"]').forEach(input => input.addEventListener('change', updateSourceControls));
+    document.querySelectorAll('input[name="prompt-source"]').forEach(input => input.addEventListener('change', () => { resetPromptDraft(); updateSourceControls(); }));
     customDescription.addEventListener('input', updateSourceControls);
     promptButton.addEventListener('click', async () => {
       promptButton.disabled = true;
@@ -225,7 +239,7 @@
       if (payload.error) { promptStatus.textContent = `Ошибка: ${payload.error}`; return; }
       promptText.disabled = false;
       renderButton.disabled = false;
-      promptText.value = payload.prompt;
+      promptText.value = payload.final_prompt || payload.prompt;
       promptStatus.textContent = 'Промпт готов к проверке и редактированию.';
     });
     renderButton.addEventListener('click', async () => {
