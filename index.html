@@ -106,7 +106,34 @@
     document.querySelector('.actions').append(clearButton);
     let currentJobId = null;
     let offset = 0;
-    const API_BASE = (location.hostname === 'localhost' || location.hostname === '127.0.0.1') ? '' : 'http://127.0.0.1:5000';
+    const API_BASE = 'http://127.0.0.1:5000';
+    let approvalFlags = {};
+    let confirmationBypass = false;
+
+    async function loadExistingImage() {
+      currentJobId = null;
+      approveButton.disabled = true;
+      publishButton.disabled = true;
+      clearButton.disabled = true;
+      styleControls.hidden = true;
+      finalPrompt.value = '';
+      if (!workSelect.value || workSelect.disabled) {
+        previewImage.removeAttribute('src');
+        previewImage.hidden = true;
+        return;
+      }
+      const payload = await fetch(`${API_BASE}/api/work-image?work_id=${encodeURIComponent(workSelect.value)}`).then(response => response.json());
+      if (payload.error) { promptStatus.textContent = `Ошибка: ${payload.error}`; return; }
+      if (payload.exists) {
+        previewImage.src = `${API_BASE}${payload.url}?t=${Date.now()}`;
+        previewImage.hidden = false;
+        promptStatus.textContent = 'Существующая иллюстрация загружена в предпросмотр. Новая генерация потребует подтверждения замены.';
+      } else {
+        previewImage.removeAttribute('src');
+        previewImage.hidden = true;
+        promptStatus.textContent = 'Для этого произведения готовой иллюстрации пока нет.';
+      }
+    }
 
     async function applyStyle(style, label) {
       monochromeButton.disabled = true;
@@ -144,8 +171,10 @@
       loadMore.hidden = !payload.has_more;
       resultCount.textContent = `Найдено: ${payload.total}`;
       updateSourceControls();
+      if (reset && payload.items.length) loadExistingImage();
     }
     kindSelect.addEventListener('change', () => { searchInput.disabled = !kindSelect.value; workSelect.disabled = !kindSelect.value; loadWorks(); });
+    workSelect.addEventListener('change', loadExistingImage);
     searchInput.addEventListener('input', () => loadWorks());
     loadMore.addEventListener('click', () => loadWorks(false));
     document.querySelectorAll('input[name="prompt-source"]').forEach(input => input.addEventListener('change', updateSourceControls));
@@ -206,9 +235,23 @@
     });
     monochromeButton.addEventListener('click', () => applyStyle('monochrome', 'чёрно-белое'));
     graphiteButton.addEventListener('click', () => applyStyle('graphite', 'карандаш / графит / уголь'));
+    approveButton.addEventListener('click', async (event) => {
+      if (confirmationBypass) { confirmationBypass = false; return; }
+      event.stopImmediatePropagation();
+      const existing = await fetch(`${API_BASE}/api/work-image?work_id=${encodeURIComponent(workSelect.value)}`).then(response => response.json());
+      approvalFlags = {};
+      if (existing.exists) {
+        if (!confirm('Изображение уже существует. Заменить?')) return;
+        approvalFlags.replace_confirmed = true;
+        if (!confirm('Операция необратима. Существующее изображение будет заменено. Подтверждаете?')) { approvalFlags = {}; return; }
+        approvalFlags.irreversible_confirmed = true;
+      }
+      confirmationBypass = true;
+      approveButton.click();
+    }, true);
     approveButton.addEventListener('click', async () => {
       approveButton.disabled = true;
-      const payload = await fetch(`${API_BASE}/api/approve`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({job_id: currentJobId}) }).then(response => response.json());
+      const payload = await fetch(`${API_BASE}/api/approve`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({job_id: currentJobId, ...approvalFlags}) }).then(response => response.json());
       promptStatus.textContent = payload.error ? `Ошибка: ${payload.error}` : `Сохранено локально: ${payload.path}`;
       publishButton.disabled = Boolean(payload.error);
     });
