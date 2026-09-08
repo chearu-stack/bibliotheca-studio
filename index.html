@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <title>Студия иллюстраций</title>
+  <style>
+    :root { color-scheme: dark; --ink: #121316; --surface: #1b1d22; --paper: #e6e4df; --muted: #a9a69e; --brass: #c8a261; }
+    * { box-sizing: border-box; }
+    body { background: var(--ink); color: var(--paper); font: 1rem/1.5 Georgia, serif; margin: 0; }
+    main { margin: auto; max-width: 58rem; padding: 3rem 1rem; }
+    h1 { color: var(--brass); font-weight: 500; }
+    label, select, input, button, textarea { display: block; width: 100%; }
+    label, legend { color: var(--muted); margin-bottom: .5rem; }
+    select, input, button, textarea { background: var(--surface); border: 1px solid var(--brass); color: var(--paper); padding: .8rem; }
+    .filters { display: grid; gap: 1rem; grid-template-columns: 1fr 2fr; }
+    fieldset { border: 1px solid rgba(200, 162, 97, .5); margin: 1.5rem 0; padding: 1rem; }
+    fieldset label { align-items: center; color: var(--paper); display: flex; gap: .6rem; margin: .5rem 0; }
+    fieldset input { accent-color: var(--brass); width: auto; }
+    button { cursor: pointer; margin-top: 1rem; }
+    button:disabled, select:disabled, textarea:disabled { cursor: not-allowed; opacity: .55; }
+    textarea { min-height: 8rem; resize: vertical; }
+    .actions { display: flex; gap: 1rem; }
+    .actions button { flex: 1; }
+    #preview-image { display: block; margin: 1.5rem auto; max-height: 70vh; object-fit: contain; width: 100%; }
+    .style-controls { display: flex; gap: 1rem; margin: 1rem 0; }
+    .style-controls button { margin-top: 0; }
+    .upload-row { border-top: 1px solid rgba(200, 162, 97, .35); margin-top: 1.5rem; padding-top: 1rem; }
+    .upload-note { color: var(--muted); font-size: .9rem; margin: .5rem 0 0; }
+    .checkpoint { border: 1px solid rgba(230, 228, 223, .17); margin-top: 2rem; padding: 1rem; }
+    @media (max-width: 650px) { .filters, .actions { display: block; } }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Студия иллюстраций</h1>
+    <div class="filters">
+      <label>Раздел
+        <select id="kind-select"><option value="">Выберите раздел</option><option value="prose">Проза</option><option value="poetry">Поэзия</option></select>
+      </label>
+      <label>Поиск по названию
+        <input id="search-input" type="search" placeholder="Начните вводить название" disabled>
+      </label>
+    </div>
+    <label for="work-select">Произведение</label>
+    <select id="work-select" disabled><option>Сначала выберите раздел</option></select>
+    <button id="load-more" type="button" hidden>Загрузить ещё</button>
+    <p id="result-count"></p>
+
+    <fieldset>
+      <legend>Источник идеи для иллюстрации</legend>
+      <label><input type="radio" name="prompt-source" value="work" checked> Генерировать из текста произведения</label>
+      <label><input type="radio" name="prompt-source" value="custom"> Генерировать по моему описанию на русском</label>
+    </fieldset>
+    <label for="custom-description">Русское описание сцены</label>
+    <textarea id="custom-description" placeholder="Например: старое зеркало, раскрытая книга и свеча на столе" disabled></textarea>
+    <button id="prompt-button" type="button" disabled>Сформировать английский промпт</button>
+    <label for="prompt-text">Промпт DeepSeek (можно отредактировать)</label>
+    <textarea id="prompt-text" placeholder="Промпт появится после обращения к DeepSeek" disabled></textarea>
+    <button id="render-button" type="button" disabled>Сгенерировать изображение</button>
+    <div class="upload-row">
+      <label for="upload-image">Или прикрепить своё изображение</label>
+      <input id="upload-image" type="file" accept="image/png,image/jpeg,image/webp" disabled>
+      <button id="upload-button" type="button" disabled>Подготовить прикреплённое изображение</button>
+      <p class="upload-note">Файл будет приведён к размеру 1024×768 px и сохранён в PNG.</p>
+    </div>
+    <label for="final-prompt">Итоговый промпт, отправленный в генератор</label>
+    <textarea id="final-prompt" readonly placeholder="Появится после генерации изображения"></textarea>
+    <img id="preview-image" alt="Предпросмотр иллюстрации" hidden>
+    <div id="style-controls" class="style-controls" hidden>
+      <button id="monochrome-button" type="button">Чёрно-белое</button>
+      <button id="graphite-button" type="button">Карандаш / графит / уголь</button>
+    </div>
+    <div class="actions">
+      <button id="approve-button" type="button" disabled>Утвердить локально</button>
+      <button id="publish-button" type="button" disabled>Опубликовать на GitHub</button>
+    </div>
+    <p id="prompt-status"></p>
+    <p class="checkpoint">Студия работает только локально. Ключи нейросетей не передаются в публичный репозиторий.</p>
+  </main>
+  <script>
+    const kindSelect = document.getElementById('kind-select');
+    const searchInput = document.getElementById('search-input');
+    const workSelect = document.getElementById('work-select');
+    const loadMore = document.getElementById('load-more');
+    const resultCount = document.getElementById('result-count');
+    const customDescription = document.getElementById('custom-description');
+    const promptButton = document.getElementById('prompt-button');
+    const promptText = document.getElementById('prompt-text');
+    const finalPrompt = document.getElementById('final-prompt');
+    const promptStatus = document.getElementById('prompt-status');
+    const renderButton = document.getElementById('render-button');
+    const uploadImage = document.getElementById('upload-image');
+    const uploadButton = document.getElementById('upload-button');
+    const previewImage = document.getElementById('preview-image');
+    const styleControls = document.getElementById('style-controls');
+    const monochromeButton = document.getElementById('monochrome-button');
+    const graphiteButton = document.getElementById('graphite-button');
+    const approveButton = document.getElementById('approve-button');
+    const publishButton = document.getElementById('publish-button');
+    let currentJobId = null;
+    let offset = 0;
+    const API_BASE = (location.hostname === 'localhost' || location.hostname === '127.0.0.1') ? '' : 'http://127.0.0.1:5000';
+
+    async function applyStyle(style, label) {
+      monochromeButton.disabled = true;
+      graphiteButton.disabled = true;
+      promptStatus.textContent = `Применяем стиль: ${label}…`;
+      const payload = await fetch(`${API_BASE}/api/filter`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({job_id: currentJobId, style}) }).then(response => response.json());
+      monochromeButton.disabled = false;
+      graphiteButton.disabled = false;
+      if (payload.error) { promptStatus.textContent = `Ошибка: ${payload.error}`; return; }
+      previewImage.src = `${payload.preview_url}?t=${Date.now()}`;
+      promptStatus.textContent = `Стиль применён: ${label}. Проверьте результат и утвердите его.`;
+    }
+
+    function sourceMode() { return document.querySelector('input[name="prompt-source"]:checked').value; }
+    function updateSourceControls() {
+      const custom = sourceMode() === 'custom';
+      customDescription.disabled = !custom;
+      promptButton.disabled = workSelect.disabled || (custom && !customDescription.value.trim());
+    }
+    async function loadWorks(reset = true) {
+      if (!kindSelect.value) return;
+      if (reset) { offset = 0; workSelect.replaceChildren(); }
+      const params = new URLSearchParams({ kind: kindSelect.value, q: searchInput.value, offset, limit: 30 });
+      const payload = await fetch(`${API_BASE}/api/works?${params}`).then(response => response.json());
+      payload.items.forEach(work => {
+        const option = document.createElement('option');
+        option.value = work.id;
+        option.textContent = `${work.title} (${work.kind === 'prose' ? 'проза' : 'поэзия'})`;
+        workSelect.append(option);
+      });
+      workSelect.disabled = payload.items.length === 0;
+      uploadImage.disabled = workSelect.disabled;
+      uploadButton.disabled = workSelect.disabled;
+      offset += payload.items.length;
+      loadMore.hidden = !payload.has_more;
+      resultCount.textContent = `Найдено: ${payload.total}`;
+      updateSourceControls();
+    }
+    kindSelect.addEventListener('change', () => { searchInput.disabled = !kindSelect.value; workSelect.disabled = !kindSelect.value; loadWorks(); });
+    searchInput.addEventListener('input', () => loadWorks());
+    loadMore.addEventListener('click', () => loadWorks(false));
+    document.querySelectorAll('input[name="prompt-source"]').forEach(input => input.addEventListener('change', updateSourceControls));
+    customDescription.addEventListener('input', updateSourceControls);
+    promptButton.addEventListener('click', async () => {
+      promptButton.disabled = true;
+      promptStatus.textContent = 'Запрос к DeepSeek…';
+      const endpoint = sourceMode() === 'custom' ? '/api/translate-prompt' : '/api/generate-prompt';
+      const body = sourceMode() === 'custom'
+        ? { work_id: workSelect.value, description: customDescription.value }
+        : { work_id: workSelect.value };
+      const payload = await fetch(`${API_BASE}${endpoint}`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body) }).then(response => response.json());
+      updateSourceControls();
+      if (payload.error) { promptStatus.textContent = `Ошибка: ${payload.error}`; return; }
+      promptText.disabled = false;
+      renderButton.disabled = false;
+      promptText.value = payload.prompt;
+      promptStatus.textContent = 'Промпт готов к проверке и редактированию.';
+    });
+    renderButton.addEventListener('click', async () => {
+      renderButton.disabled = true;
+      promptStatus.textContent = 'Генерация изображения…';
+      const payload = await fetch(`${API_BASE}/api/render`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({work_id: workSelect.value, prompt: promptText.value}) }).then(response => response.json());
+      renderButton.disabled = false;
+      if (payload.error) { promptStatus.textContent = `Ошибка: ${payload.error}`; return; }
+      previewImage.src = `${API_BASE}${payload.preview_url}?t=${Date.now()}`;
+      previewImage.hidden = false;
+      finalPrompt.value = payload.final_prompt;
+      currentJobId = payload.job_id;
+      styleControls.hidden = false;
+      approveButton.disabled = false;
+      publishButton.disabled = true;
+      promptStatus.textContent = 'Предпросмотр готов. Проверьте изображение и утвердите его локально.';
+    });
+    uploadImage.addEventListener('change', () => {
+      uploadButton.disabled = !uploadImage.files.length || workSelect.disabled;
+    });
+    uploadButton.addEventListener('click', async () => {
+      if (!uploadImage.files.length) return;
+      uploadButton.disabled = true;
+      promptStatus.textContent = 'Подготавливаем изображение…';
+      const form = new FormData();
+      form.append('work_id', workSelect.value);
+      form.append('image', uploadImage.files[0]);
+      const payload = await fetch(`${API_BASE}/api/upload`, { method: 'POST', body: form }).then(response => response.json());
+      uploadButton.disabled = false;
+      if (payload.error) { promptStatus.textContent = `Ошибка: ${payload.error}`; return; }
+      previewImage.src = `${API_BASE}${payload.preview_url}?t=${Date.now()}`;
+      previewImage.hidden = false;
+      finalPrompt.value = payload.final_prompt;
+      currentJobId = payload.job_id;
+      styleControls.hidden = false;
+      approveButton.disabled = false;
+      publishButton.disabled = true;
+      promptStatus.textContent = 'Изображение приведено к 1024×768 PNG. Проверьте предпросмотр и утвердите его локально.';
+    });
+    monochromeButton.addEventListener('click', () => applyStyle('monochrome', 'чёрно-белое'));
+    graphiteButton.addEventListener('click', () => applyStyle('graphite', 'карандаш / графит / уголь'));
+    approveButton.addEventListener('click', async () => {
+      approveButton.disabled = true;
+      const payload = await fetch(`${API_BASE}/api/approve`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({job_id: currentJobId}) }).then(response => response.json());
+      promptStatus.textContent = payload.error ? `Ошибка: ${payload.error}` : `Сохранено локально: ${payload.path}`;
+      publishButton.disabled = Boolean(payload.error);
+    });
+    publishButton.addEventListener('click', async () => {
+      if (!confirm('Собрать сайт, создать коммит и отправить иллюстрацию в GitHub?')) return;
+      publishButton.disabled = true;
+      const payload = await fetch(`${API_BASE}/api/publish`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({job_id: currentJobId}) }).then(response => response.json());
+      promptStatus.textContent = payload.error ? `Ошибка: ${payload.error}` : `Опубликовано: ${payload.commit}`;
+    });
+  </script>
+</body>
+</html>
