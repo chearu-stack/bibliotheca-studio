@@ -33,6 +33,10 @@
     .upload-row { border-top: 1px solid rgba(200, 162, 97, .35); margin-top: 1.5rem; padding-top: 1rem; }
     .upload-note { color: var(--muted); font-size: .9rem; margin: .5rem 0 0; }
     .checkpoint { border: 1px solid rgba(230, 228, 223, .17); margin-top: 2rem; padding: 1rem; }
+    .archive-refresh { border: 1px solid rgba(200, 162, 97, .5); margin: 1.5rem 0; padding: 1rem; }
+    .archive-refresh h2 { color: var(--brass); font-size: 1.1rem; font-weight: 500; margin: 0; }
+    #refresh-archive-progress { accent-color: var(--brass); display: block; height: 1rem; margin-top: 1rem; width: 100%; }
+    #refresh-archive-status { color: var(--muted); margin-bottom: 0; }
     @media (max-width: 650px) { .filters, .actions { display: block; } }
   </style>
 </head>
@@ -51,6 +55,12 @@
     <select id="work-select" disabled><option>Сначала выберите раздел</option></select>
     <button id="load-more" type="button" hidden>Загрузить ещё</button>
     <p id="result-count"></p>
+    <section class="archive-refresh" aria-labelledby="archive-refresh-title">
+      <h2 id="archive-refresh-title">Обновление архива</h2>
+      <button id="refresh-archive-button" type="button">Принудительно обновить архив</button>
+      <progress id="refresh-archive-progress" max="100" value="0" hidden></progress>
+      <p id="refresh-archive-status" role="status">Новые произведения можно проверить вручную в любой момент.</p>
+    </section>
 
     <fieldset>
       <legend>Источник идеи для иллюстрации</legend>
@@ -101,6 +111,9 @@
     const workSelect = document.getElementById('work-select');
     const loadMore = document.getElementById('load-more');
     const resultCount = document.getElementById('result-count');
+    const refreshArchiveButton = document.getElementById('refresh-archive-button');
+    const refreshArchiveProgress = document.getElementById('refresh-archive-progress');
+    const refreshArchiveStatus = document.getElementById('refresh-archive-status');
     const customDescription = document.getElementById('custom-description');
     const promptButton = document.getElementById('prompt-button');
     const promptText = document.getElementById('prompt-text');
@@ -135,6 +148,7 @@
     const API_BASE = 'http://127.0.0.1:5000';
     let approvalFlags = {};
     let confirmationBypass = false;
+    let refreshTimer = null;
     const promptLabel = document.querySelector('label[for="prompt-text"]');
     const finalPromptLabel = document.querySelector('label[for="final-prompt"]');
     promptLabel.textContent = 'Итоговый английский промпт (можно отредактировать)';
@@ -201,6 +215,40 @@
       promptButton.textContent = custom ? 'Перевести в английский промпт' : 'Сгенерировать промпт';
       promptButton.disabled = workSelect.disabled || (custom && !customDescription.value.trim());
     }
+    async function watchArchiveRefresh(jobId) {
+      const response = await fetch(`/api/refresh-archive/${encodeURIComponent(jobId)}`);
+      const payload = await response.json();
+      if (payload.error) throw new Error(payload.error);
+      refreshArchiveProgress.hidden = false;
+      refreshArchiveProgress.value = payload.progress || 0;
+      refreshArchiveStatus.textContent = payload.message || '';
+      if (payload.status === 'running') {
+        refreshTimer = setTimeout(() => watchArchiveRefresh(jobId), 1000);
+        return;
+      }
+      refreshArchiveButton.disabled = false;
+      if (payload.status === 'completed') {
+        refreshArchiveStatus.textContent = `${payload.message} Список произведений обновляется…`;
+        await loadWorks();
+      } else {
+        refreshArchiveStatus.textContent = `${payload.message} Проверьте журнал локального сервера.`;
+      }
+    }
+    refreshArchiveButton.addEventListener('click', async () => {
+      refreshArchiveButton.disabled = true;
+      refreshArchiveProgress.hidden = false;
+      refreshArchiveProgress.value = 0;
+      refreshArchiveStatus.textContent = 'Запускаем обновление архива…';
+      try {
+        const response = await fetch('/api/refresh-archive', { method: 'POST' });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.message || payload.error || 'Не удалось запустить обновление');
+        await watchArchiveRefresh(payload.job_id);
+      } catch (error) {
+        refreshArchiveButton.disabled = false;
+        refreshArchiveStatus.textContent = `Ошибка: ${error.message}`;
+      }
+    });
     async function loadWorks(reset = true) {
       if (!kindSelect.value) return;
       if (reset) { offset = 0; workSelect.replaceChildren(); }
