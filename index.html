@@ -216,7 +216,7 @@
       promptButton.disabled = workSelect.disabled || (custom && !customDescription.value.trim());
     }
     async function watchArchiveRefresh(jobId) {
-      const response = await fetch(`/api/refresh-archive/${encodeURIComponent(jobId)}`);
+      const response = await fetch(`${API_BASE}/api/refresh-archive/${encodeURIComponent(jobId)}`);
       const payload = await response.json();
       if (payload.error) throw new Error(payload.error);
       refreshArchiveProgress.hidden = false;
@@ -240,7 +240,7 @@
       refreshArchiveProgress.value = 0;
       refreshArchiveStatus.textContent = 'Запускаем обновление архива…';
       try {
-        const response = await fetch('/api/refresh-archive', { method: 'POST' });
+        const response = await fetch(`${API_BASE}/api/refresh-archive`, { method: 'POST' });
         const payload = await response.json();
         if (!response.ok) throw new Error(payload.message || payload.error || 'Не удалось запустить обновление');
         await watchArchiveRefresh(payload.job_id);
