@@ -98,10 +98,10 @@
     </div>
     <p id="prompt-status"></p>
     <section class="archive-refresh" aria-labelledby="archive-refresh-title">
-      <h2 id="archive-refresh-title">Обновление архива</h2>
-      <button id="refresh-archive-button" type="button">Принудительно обновить архив</button>
+      <h2 id="archive-refresh-title">Резервное локальное обновление</h2>
+      <button id="refresh-archive-button" type="button">Запустить резервное обновление</button>
       <progress id="refresh-archive-progress" max="100" value="0" hidden></progress>
-      <p id="refresh-archive-status" role="status">Новые произведения можно проверить вручную в любой момент.</p>
+      <p id="refresh-archive-status" role="status">Основное обновление выполняется GitHub Actions по расписанию. Эта кнопка запускает обновление только на локальном сервере.</p>
     </section>
     <p class="checkpoint">Студия работает только локально. Ключи нейросетей не передаются в публичный репозиторий.</p>
   </main>
@@ -375,6 +375,7 @@
     publishButton.addEventListener('click', async () => {
       if (!confirm('Собрать сайт, создать коммит и отправить иллюстрацию в GitHub?')) return;
       publishButton.disabled = true;
+      promptStatus.textContent = 'Проверка GitHub и синхронизация ветки...';
       const payload = await fetch(`${API_BASE}/api/publish`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({job_id: currentJobId}) }).then(response => response.json());
       promptStatus.textContent = payload.error ? `Ошибка: ${payload.error}` : `Опубликовано: ${payload.commit}`;
     });
