@@ -145,7 +145,7 @@
     let currentStyle = null;
     let styleTimer = null;
     let offset = 0;
-    const API_BASE = 'http://127.0.0.1:5000';
+    const API_BASE = 'http://127.0.0.1:5173';
     async function parseJsonResponse(response) {
       const body = await response.text();
       try { return JSON.parse(body); }
